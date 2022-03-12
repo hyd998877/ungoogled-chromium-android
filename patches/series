@@ -40,7 +40,6 @@ ungoogled-chromium-android/Remove-dependency-on-com.google.android.gms.common-au
 ungoogled-chromium-android/Remove-dependency-on-com.google.android.play.patch
 ungoogled-chromium-android/Remove-dependency-on-com.google.android.play.core.splitcompat-com.google.android.play.core.splitinstall.patch
 ungoogled-chromium-android/Disable-contextual-search.patch
-ungoogled-chromium-android/Disable-lite-mode-prompt.patch
 ungoogled-chromium-android/Disable-prefetch.patch
 ungoogled-chromium-android/Add-more-search-engines.patch
 ungoogled-chromium-android/Add-folder-button-bookmark.patch
@@ -55,7 +54,6 @@ ungoogled-chromium-android/Add-force-tablet-ui-option.patch
 ungoogled-chromium-android/Disable-offline-indicator.patch
 Bromite/Remove-account-permissions-from-manifest.patch
 Bromite/updater-disable-updater-pings.patch
-Bromite/Change-default-webRTC-policy-to-not-use-any-address.patch
 Bromite/Inject-scripts-for-AMP-tracking-ads-and-video.patch
 Bromite/Add-exit-menu-item.patch
 Bromite/Add-bookmark-import-export-actions.patch

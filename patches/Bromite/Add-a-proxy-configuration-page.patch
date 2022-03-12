@@ -9,31 +9,30 @@ Offer auto-complete for the proxy page URL.
 Store proxy settings in LocalState instead of Profile, so that proxy is used
 for SimpleURLLoaders as well.
 ---
- chrome/android/java/res/values/values.xml                                                 |    3 
- chrome/android/java/res/xml/privacy_preferences.xml                                       |    4 
- chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java |    1 
- chrome/browser/autocomplete/chrome_autocomplete_provider_client.cc                        |    2 
- chrome/browser/browser_resources.grd                                                      |    6 
- chrome/browser/net/proxy_service_factory.cc                                               |   23 
- chrome/browser/net/proxy_service_factory.h                                                |    3 
- chrome/browser/prefs/browser_prefs.cc                                                     |    4 
- chrome/browser/prefs/chrome_command_line_pref_store.cc                                    |    2 
- chrome/browser/resources/proxy_config.css                                                 |   61 +
- chrome/browser/resources/proxy_config.html                                                |   79 +
- chrome/browser/resources/proxy_config.js                                                  |  266 ++++++
- chrome/browser/ui/BUILD.gn                                                                |    2 
- chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc                               |    3 
- chrome/browser/ui/webui/proxy_config_ui.cc                                                |  419 ++++++++++
- chrome/browser/ui/webui/proxy_config_ui.h                                                 |   33 
- chrome/common/webui_url_constants.cc                                                      |    4 
- chrome/common/webui_url_constants.h                                                       |    2 
- components/proxy_config/pref_proxy_config_tracker_impl.cc                                 |    1 
- components/proxy_config/proxy_config_dictionary.cc                                        |   30 
- components/proxy_config/proxy_config_dictionary.h                                         |    7 
- components/proxy_config/proxy_policy_handler.cc                                           |    2 
- net/proxy_resolution/proxy_config.cc                                                      |   52 +
- net/proxy_resolution/proxy_config.h                                                       |    3 
- 24 files changed, 998 insertions(+), 14 deletions(-)
+ chrome/android/java/res/values/values.xml                          |    3 
+ chrome/android/java/res/xml/privacy_preferences.xml                |    4 
+ chrome/browser/autocomplete/chrome_autocomplete_provider_client.cc |    2 
+ chrome/browser/browser_resources.grd                               |    6 
+ chrome/browser/net/proxy_service_factory.cc                        |   23 
+ chrome/browser/net/proxy_service_factory.h                         |    3 
+ chrome/browser/prefs/browser_prefs.cc                              |    3 
+ chrome/browser/prefs/chrome_command_line_pref_store.cc             |    2 
+ chrome/browser/resources/proxy_config.css                          |   61 +
+ chrome/browser/resources/proxy_config.html                         |   79 +
+ chrome/browser/resources/proxy_config.js                           |  266 ++++++
+ chrome/browser/ui/BUILD.gn                                         |    2 
+ chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc        |    3 
+ chrome/browser/ui/webui/proxy_config_ui.cc                         |  419 ++++++++++
+ chrome/browser/ui/webui/proxy_config_ui.h                          |   33 
+ chrome/common/webui_url_constants.cc                               |    4 
+ chrome/common/webui_url_constants.h                                |    2 
+ components/proxy_config/pref_proxy_config_tracker_impl.cc          |    1 
+ components/proxy_config/proxy_config_dictionary.cc                 |   30 
+ components/proxy_config/proxy_config_dictionary.h                  |    7 
+ components/proxy_config/proxy_policy_handler.cc                    |    2 
+ net/proxy_resolution/proxy_config.cc                               |   52 +
+ net/proxy_resolution/proxy_config.h                                |    3 
+ 23 files changed, 996 insertions(+), 14 deletions(-)
  create mode 100644 chrome/browser/resources/proxy_config.css
  create mode 100644 chrome/browser/resources/proxy_config.html
  create mode 100644 chrome/browser/resources/proxy_config.js
@@ -65,19 +64,9 @@ for SimpleURLLoaders as well.
      <Preference
          android:key="clear_browsing_data"
          android:title="@string/clear_browsing_data_title"
---- a/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
-+++ b/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
-@@ -59,6 +59,7 @@ public class PrivacySettings
-     private static final String PREF_PRIVACY_SANDBOX = "privacy_sandbox";
-     private static final String PREF_PRIVACY_REVIEW = "privacy_review";
-     private static final String PREF_INCOGNITO_LOCK = "incognito_lock";
-+    private static final String PREF_PROXY_OPTIONS = "proxy";
- 
-     private static final String PREF_CLOSE_TABS_ON_EXIT = "close_tabs_on_exit";
- 
 --- a/chrome/browser/autocomplete/chrome_autocomplete_provider_client.cc
 +++ b/chrome/browser/autocomplete/chrome_autocomplete_provider_client.cc
-@@ -279,6 +279,8 @@ ChromeAutocompleteProviderClient::GetBui
+@@ -277,6 +277,8 @@ ChromeAutocompleteProviderClient::GetBui
        base::ASCIIToUTF16(chrome::kChromeUISettingsURL));
  #endif
    builtins_to_provide.push_back(
@@ -146,15 +135,15 @@ for SimpleURLLoaders as well.
 +}
 --- a/chrome/browser/net/proxy_service_factory.h
 +++ b/chrome/browser/net/proxy_service_factory.h
-@@ -8,6 +8,7 @@
- #include <memory>
+@@ -6,6 +6,7 @@
+ #define CHROME_BROWSER_NET_PROXY_SERVICE_FACTORY_H_
  
- #include "base/macros.h"
+ #include <memory>
 +#include "components/prefs/pref_registry_simple.h"
  
  class PrefProxyConfigTracker;
  class PrefService;
-@@ -42,6 +43,8 @@ class ProxyServiceFactory {
+@@ -40,6 +41,8 @@ class ProxyServiceFactory {
    // (ChromeOS only).
    static std::unique_ptr<PrefProxyConfigTracker>
    CreatePrefProxyConfigTrackerOfLocalState(PrefService* local_state_prefs);
@@ -174,18 +163,17 @@ for SimpleURLLoaders as well.
  #if BUILDFLAG(ENABLE_BACKGROUND_MODE)
  #include "chrome/browser/background/background_mode_manager.h"
  #endif
-@@ -978,6 +980,8 @@ void RegisterLocalState(PrefRegistrySimp
+@@ -1022,6 +1024,7 @@ void RegisterLocalState(PrefRegistrySimp
    PluginsResourceService::RegisterPrefs(registry);
  #endif
  
 +  ProxyServiceFactory::RegisterPrefs(registry);
-+
- #if defined(OS_ANDROID)
+ #if BUILDFLAG(IS_ANDROID)
    ::android::RegisterPrefs(registry);
  
 --- a/chrome/browser/prefs/chrome_command_line_pref_store.cc
 +++ b/chrome/browser/prefs/chrome_command_line_pref_store.cc
-@@ -158,7 +158,7 @@ void ChromeCommandLinePrefStore::ApplyPr
+@@ -157,7 +157,7 @@ void ChromeCommandLinePrefStore::ApplyPr
      SetValue(
          proxy_config::prefs::kProxy,
          std::make_unique<base::Value>(ProxyConfigDictionary::CreateFixedServers(
@@ -611,7 +599,7 @@ for SimpleURLLoaders as well.
 +})();
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -280,6 +280,8 @@ static_library("ui") {
+@@ -282,6 +282,8 @@ static_library("ui") {
      "webui/metrics_handler.h",
      "webui/net_export_ui.cc",
      "webui/net_export_ui.h",
@@ -628,9 +616,9 @@ for SimpleURLLoaders as well.
  #include "chrome/browser/ui/webui/predictors/predictors_ui.h"
 +#include "chrome/browser/ui/webui/proxy_config_ui.h"
  #include "chrome/browser/ui/webui/quota_internals/quota_internals_ui.h"
+ #include "chrome/browser/ui/webui/segmentation_internals/segmentation_internals_ui.h"
  #include "chrome/browser/ui/webui/signin_internals_ui.h"
- #include "chrome/browser/ui/webui/support_tool_ui.h"
-@@ -650,6 +651,8 @@ WebUIFactoryFunction GetWebUIFactoryFunc
+@@ -693,6 +694,8 @@ WebUIFactoryFunction GetWebUIFactoryFunc
      return &NewWebUI<MemoryInternalsUI>;
    if (url.host_piece() == chrome::kChromeUINetExportHost)
      return &NewWebUI<NetExportUI>;
@@ -1099,7 +1087,7 @@ for SimpleURLLoaders as well.
 +#endif  // CHROME_BROWSER_UI_WEBUI_PROXY_CONFIG_UI_H_
 --- a/chrome/common/webui_url_constants.cc
 +++ b/chrome/common/webui_url_constants.cc
-@@ -37,6 +37,8 @@ const char kChromeUICertificateViewerHos
+@@ -38,6 +38,8 @@ const char kChromeUICertificateViewerHos
  const char kChromeUICertificateViewerURL[] = "chrome://view-cert/";
  const char kChromeUIChromeSigninHost[] = "chrome-signin";
  const char kChromeUIChromeSigninURL[] = "chrome://chrome-signin/";
@@ -1108,7 +1096,7 @@ for SimpleURLLoaders as well.
  const char kChromeUIChromeURLsHost[] = "chrome-urls";
  const char kChromeUIChromeURLsURL[] = "chrome://chrome-urls/";
  const char kChromeUIComponentsHost[] = "components";
-@@ -354,6 +356,7 @@ bool IsSystemWebUIHost(base::StringPiece
+@@ -397,6 +399,7 @@ bool IsSystemWebUIHost(base::StringPiece
      kChromeUIMobileSetupHost,
      kChromeUIMultiDeviceSetupHost,
      kChromeUINetworkHost,
@@ -1116,8 +1104,8 @@ for SimpleURLLoaders as well.
      kChromeUIOobeHost,
      kChromeUIOSCreditsHost,
      kChromeUIOSSettingsHost,
-@@ -582,6 +585,7 @@ const char* const kChromeHostURLs[] = {
- #if !defined(OS_ANDROID)
+@@ -634,6 +637,7 @@ const char* const kChromeHostURLs[] = {
+ #if !BUILDFLAG(IS_ANDROID)
  #if !BUILDFLAG(IS_CHROMEOS_ASH)
      kChromeUIAppLauncherPageHost,
 +    kChromeUIProxyConfigHost,
@@ -1126,7 +1114,7 @@ for SimpleURLLoaders as well.
      kChromeUIDownloadsHost,
 --- a/chrome/common/webui_url_constants.h
 +++ b/chrome/common/webui_url_constants.h
-@@ -125,6 +125,8 @@ extern const char kChromeUIMemoryInterna
+@@ -129,6 +129,8 @@ extern const char kChromeUIMemoryInterna
  extern const char kChromeUINTPTilesInternalsHost[];
  extern const char kChromeUINaClHost[];
  extern const char kChromeUINetExportHost[];
@@ -1240,7 +1228,7 @@ for SimpleURLLoaders as well.
  
 --- a/components/proxy_config/proxy_config_dictionary.h
 +++ b/components/proxy_config/proxy_config_dictionary.h
-@@ -43,6 +43,7 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
+@@ -42,6 +42,7 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
    bool GetProxyServer(std::string* out) const;
    bool GetBypassList(std::string* out) const;
    bool HasBypassList() const;
@@ -1248,7 +1236,7 @@ for SimpleURLLoaders as well.
  
    const base::Value& GetDictionary() const;
  
-@@ -51,7 +52,8 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
+@@ -50,7 +51,8 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
    static base::Value CreatePacScript(const std::string& pac_url,
                                       bool pac_mandatory);
    static base::Value CreateFixedServers(const std::string& proxy_server,
@@ -1258,7 +1246,7 @@ for SimpleURLLoaders as well.
    static base::Value CreateSystem();
  
    // Encodes the proxy server as "<url-scheme>=<proxy-scheme>://<proxy>".
-@@ -67,7 +69,8 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
+@@ -66,7 +68,8 @@ class PROXY_CONFIG_EXPORT ProxyConfigDic
                                        const std::string& pac_url,
                                        bool pac_mandatory,
                                        const std::string& proxy_server,
